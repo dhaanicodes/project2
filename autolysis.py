@@ -1,3 +1,14 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "httpx",
+#   "pandas",
+#   "seaborn",
+#   "matplotlib",
+#   "scikit-learn",
+# ]
+# ///
+
 import os
 import sys
 import httpx
@@ -184,3 +195,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
