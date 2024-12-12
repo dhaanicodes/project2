@@ -19,11 +19,11 @@ from sklearn.ensemble import IsolationForest
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
-import os  # Make sure to import os for environment variable access
 
 # Constants
 API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-API_TOKEN = os.environ.get("AIPROXY_TOKEN")  # Use environment variable for the token
+API_TOKEN = os.environ.get("AIPROXY_TOKEN")
+VISION_API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/images/generations"
 
 # Function to read CSV files
 def read_csv_file(filename):
@@ -35,15 +35,12 @@ def read_csv_file(filename):
 
 # Perform data analysis
 def analyze_data(df):
-    # Separate numeric and non-numeric columns
     numeric_df = df.select_dtypes(include=["number"])
     non_numeric_df = df.select_dtypes(exclude=["number"])
-    
-    # Handle missing values for numeric columns
+
     numeric_imputer = SimpleImputer(strategy='mean')
     df[numeric_df.columns] = numeric_imputer.fit_transform(numeric_df)
-    
-    # Handle missing values for non-numeric columns
+
     non_numeric_imputer = SimpleImputer(strategy='most_frequent')
     df[non_numeric_df.columns] = non_numeric_imputer.fit_transform(non_numeric_df)
 
@@ -86,7 +83,6 @@ def generate_visualizations(df, output_dir):
     charts = []
     numeric_df = df.select_dtypes(include=["number"])
 
-    # Correlation heatmap
     if numeric_df.shape[1] > 1:
         plt.figure(figsize=(10, 6))
         sns.heatmap(numeric_df.corr(), annot=True, cmap="coolwarm")
@@ -94,7 +90,6 @@ def generate_visualizations(df, output_dir):
         plt.savefig(os.path.join(output_dir, "correlation_matrix.png"))
         charts.append("correlation_matrix.png")
 
-    # Distribution plots
     for col in numeric_df.columns:
         plt.figure(figsize=(8, 5))
         sns.histplot(numeric_df[col].dropna(), kde=True)
@@ -103,7 +98,6 @@ def generate_visualizations(df, output_dir):
         plt.savefig(os.path.join(output_dir, filename))
         charts.append(filename)
 
-    # Missing values heatmap
     if df.isnull().sum().any():
         plt.figure(figsize=(10, 6))
         sns.heatmap(df.isnull(), cbar=False, cmap="viridis")
@@ -133,6 +127,25 @@ def send_to_llm(messages):
         print("Error: The request to the AI Proxy timed out. Try again later.")
         sys.exit(1)
 
+# Generate visual narrations
+def generate_visual_narration(image_path):
+    headers = {
+        "Authorization": f"Bearer {API_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": "dalle-mini",
+        "image_path": image_path,
+        "prompt": "Generate a detailed description for this visualization for narration purposes."
+    }
+    response = httpx.post(
+        VISION_API_URL,
+        json=payload,
+        headers=headers,
+        timeout=30.0
+    )
+    return response.json()
+
 # Narrate story based on analysis
 def narrate_story(analysis, charts, output_dir):
     prompt = f"""
@@ -161,6 +174,7 @@ def narrate_story(analysis, charts, output_dir):
     - What additional data would improve the insights drawn from this dataset?
     - Draft a summary of findings and their implications for decision-making.
     """
+
     messages = {
         "model": "gpt-4o-mini",
         "messages": [
@@ -172,6 +186,11 @@ def narrate_story(analysis, charts, output_dir):
     with open(os.path.join(output_dir, "README.md"), "w") as file:
         file.write(story)
 
+    for chart in charts:
+        visual_description = generate_visual_narration(os.path.join(output_dir, chart))
+        with open(os.path.join(output_dir, "README.md"), "a") as file:
+            file.write(f"\n\n## Description for {chart}\n{visual_description}")
+
 # Main function
 def main():
     if len(sys.argv) != 2:
@@ -181,7 +200,6 @@ def main():
     dataset_path = sys.argv[1]
     output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
 
-    # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
     try:
