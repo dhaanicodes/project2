@@ -1,5 +1,5 @@
+import os
 import sys
-import subprocess
 import httpx
 import pandas as pd
 import seaborn as sns
@@ -13,16 +13,6 @@ import os  # Make sure to import os for environment variable access
 # Constants
 API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 API_TOKEN = os.environ.get("AIPROXY_TOKEN")  # Use environment variable for the token
-
-# Function to check and install dependencies
-def ensure_dependencies():
-    dependencies = ["seaborn"]
-    for package in dependencies:
-        try:
-            __import__(package)
-        except ImportError:
-            print(f"{package} not found. Installing...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 
 # Function to read CSV files
 def read_csv_file(filename):
@@ -173,8 +163,6 @@ def narrate_story(analysis, charts, output_dir):
 
 # Main function
 def main():
-    ensure_dependencies()
-
     if len(sys.argv) != 2:
         print("Usage: python autolysis.py <dataset.csv>")
         sys.exit(1)
