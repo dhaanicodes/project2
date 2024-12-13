@@ -19,6 +19,7 @@ from sklearn.ensemble import IsolationForest
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
+import os  # Make sure to import os for environment variable access
 
 # Constants
 API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
@@ -128,14 +129,8 @@ def send_to_llm(messages):
         )
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
-    except httpx.HTTPStatusError as e:
-        print(f"HTTP error occurred: {e}")
-        sys.exit(1)
-    except KeyError:
-        print("Unexpected response format from AI Proxy.")
-        return ""
-    except httpx.RequestError as e:
-        print(f"An error occurred while requesting: {e}")
+    except httpx.ReadTimeout:
+        print("Error: The request to the AI Proxy timed out. Try again later.")
         sys.exit(1)
 
 # Narrate story based on analysis
@@ -174,11 +169,8 @@ def narrate_story(analysis, charts, output_dir):
         ],
     }
     story = send_to_llm(messages)
-    if story:
-        with open(os.path.join(output_dir, "README.md"), "w") as file:
-            file.write(story)
-    else:
-        print("Failed to generate README.md")
+    with open(os.path.join(output_dir, "README.md"), "w") as file:
+        file.write(story)
 
 # Main function
 def main():
