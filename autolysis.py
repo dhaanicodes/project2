@@ -6,7 +6,6 @@
 #   "seaborn",
 #   "matplotlib",
 #   "scikit-learn",
-#   "tenacity",
 # ]
 # ///
 
@@ -20,7 +19,6 @@ from sklearn.ensemble import IsolationForest
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
-from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Constants
 API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
@@ -111,23 +109,25 @@ def generate_visualizations(df, output_dir):
     return charts
 
 # Send data to LLM
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(5))
 def send_to_llm(messages):
     headers = {
         "Authorization": f"Bearer {API_TOKEN}",
         "Content-Type": "application/json",
     }
-    response = httpx.post(
-        API_URL,
-        json=messages,
-        headers=headers,
-        timeout=30.0
-    )
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    try:
+        response = httpx.post(
+            API_URL,
+            json=messages,
+            headers=headers,
+            timeout=30.0
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+    except httpx.ReadTimeout:
+        print("Error: The request to the AI Proxy timed out. Try again later.")
+        sys.exit(1)
 
 # Generate visual narrations
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(5))
 def generate_visual_narration(image_path):
     headers = {
         "Authorization": f"Bearer {API_TOKEN}",
@@ -136,8 +136,7 @@ def generate_visual_narration(image_path):
     payload = {
         "model": "dalle-mini",
         "image_path": image_path,
-        "prompt": "Provide a brief description of this visualization.",
-        "detail": "low"
+        "prompt": "Generate a detailed description for this visualization for narration purposes."
     }
     response = httpx.post(
         VISION_API_URL,
@@ -145,23 +144,35 @@ def generate_visual_narration(image_path):
         headers=headers,
         timeout=30.0
     )
-    response.raise_for_status()
     return response.json()
 
 # Narrate story based on analysis
 def narrate_story(analysis, charts, output_dir):
     prompt = f"""
-    Create a concise README.md summarizing this analysis:
-    - Data Summary: Key statistics and notable features.
-    - Missing Values: Significant patterns.
-    - Correlation: Key strong/weak relationships.
-    - Outliers: Summary of detected anomalies.
-    - Clustering: Characteristics and potential insights.
-
+    Create a README.md narrating this analysis:
+    Data Summary: {analysis['summary']}
+    Missing Values: {analysis['missing_values']}
+    Correlation Matrix: {analysis['correlation']}
+    Outlier Detection: {analysis['outliers']}
+    Clustering Analysis: {analysis['clusters']}
     Attach these charts: {charts}.
 
-    Provide actionable insights and potential decisions derived from the analysis.
-    Focus on brevity and clarity.
+    Key prompts to use:
+    - Identify anomalies or surprising patterns from the analysis.
+    - Suggest potential business decisions or insights based on clustering.
+    - Explain why certain correlations are strong or weak.
+    - Hypothesize causes for missing values and how to handle them.
+    - Provide recommendations for future analysis or data collection.
+
+    Additional Prompts:
+    - What are the key trends or patterns in the dataset?
+    - Summarize the structure and content of this dataset.
+    - Suggest methods to handle missing data in this dataset.
+    - Identify potential causes of detected outliers.
+    - Describe the characteristics of identified clusters and their potential business implications.
+    - Evaluate the overall quality of this dataset.
+    - What additional data would improve the insights drawn from this dataset?
+    - Draft a summary of findings and their implications for decision-making.
     """
 
     messages = {
@@ -183,7 +194,7 @@ def narrate_story(analysis, charts, output_dir):
 # Main function
 def main():
     if len(sys.argv) != 2:
-        print("Usage: uv run autolysis.py <dataset.csv>")
+        print("Usage: python autolysis.py <dataset.csv>")
         sys.exit(1)
 
     dataset_path = sys.argv[1]
@@ -202,4 +213,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
