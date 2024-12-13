@@ -103,28 +103,12 @@ def generate_visualization(df, output_dir):
 
     return None
 
-# Send data to LLM dynamically
-def send_to_llm(analysis, chart, prompt_type):
+# Send data to LLM
+def send_to_llm(messages):
     headers = {
         "Authorization": f"Bearer {API_TOKEN}",
         "Content-Type": "application/json",
     }
-
-    prompt_mapping = {
-        "summary": f"Summarize the dataset with this analysis: {analysis['summary']} and missing values: {analysis['missing_values']}.",
-        "correlation": f"Analyze this correlation data: {analysis['correlation']} and suggest insights.",
-        "outliers": f"Explain the implications of these outliers: {analysis['outliers']}.",
-        "clusters": f"Describe the clustering analysis: {analysis['clusters']} and its business relevance.",
-    }
-
-    messages = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": "You are an analytical assistant."},
-            {"role": "user", "content": prompt_mapping[prompt_type]}
-        ],
-    }
-
     try:
         response = httpx.post(
             API_URL,
@@ -140,29 +124,42 @@ def send_to_llm(analysis, chart, prompt_type):
 
 # Narrate story based on analysis
 def narrate_story(analysis, chart, output_dir):
-    prompts = ["summary", "correlation", "outliers", "clusters"]
-    responses = [send_to_llm(analysis, chart, prompt) for prompt in prompts]
+    prompt = f"""
+    Create a README.md narrating this analysis:
+    Data Summary: {analysis['summary']}
+    Missing Values: {analysis['missing_values']}
+    Correlation Matrix: {analysis['correlation']}
+    Outlier Detection: {analysis['outliers']}
+    Clustering Analysis: {analysis['clusters']}
+    Attach this chart: {chart}.
 
-    readme_content = f"""
-# Analysis Report
+    Key prompts to use:
+    - Identify anomalies or surprising patterns from the analysis.
+    - Suggest potential business decisions or insights based on clustering.
+    - Explain why certain correlations are strong or weak.
+    - Hypothesize causes for missing values and how to handle them.
+    - Provide recommendations for future analysis or data collection.
 
-## Summary
-{responses[0]}
-
-## Correlation Insights
-{responses[1]}
-
-## Outliers Explanation
-{responses[2]}
-
-## Clustering Insights
-{responses[3]}
-
-![Visualization]({chart})
-"""
-
+    Additional Prompts:
+    - What are the key trends or patterns in the dataset?
+    - Summarize the structure and content of this dataset.
+    - Suggest methods to handle missing data in this dataset.
+    - Identify potential causes of detected outliers.
+    - Describe the characteristics of identified clusters and their potential business implications.
+    - Evaluate the overall quality of this dataset.
+    - What additional data would improve the insights drawn from this dataset?
+    - Draft a summary of findings and their implications for decision-making.
+    """
+    messages = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": "You are a Markdown writer."},
+            {"role": "user", "content": prompt}
+        ],
+    }
+    story = send_to_llm(messages)
     with open(os.path.join(output_dir, "README.md"), "w") as file:
-        file.write(readme_content)
+        file.write(story)
 
 # Main function
 def main():
@@ -186,4 +183,4 @@ def main():
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    main()
+    main(
